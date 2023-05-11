@@ -132,6 +132,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\TanmiEcs.hpp" />
+    <ClInclude Include="..\..\src\TanmiEcsTools.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="demo.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -34,3 +34,5 @@
 #vs
 /.vs
 /demo/tanmiEcs/.vs
+/demo/tanmiEcs/x86
+/demo/tanmiEcs/x64
