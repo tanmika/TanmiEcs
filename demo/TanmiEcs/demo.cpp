@@ -51,7 +51,7 @@ void RunSystem(Command& cmd, Queryer queryer, Resource res, Event& event)
 	{
 		queryer.GetComponent<Time>(e).t += timer;
 		std::cout << queryer.GetComponent<Name>(e).name << std::endl;
-		if (queryer.GetComponent<ID>(e).id == count->num)
+		if (count && queryer.GetComponent<ID>(e).id == count->num)
 		{
 			std::cout << "ID:" << queryer.GetComponent<ID>(e).id 
 				<< "  Time:" << queryer.GetComponent<Time>(e).t << std::endl;
