@@ -1,42 +1,72 @@
 #include"../../src/TanmiEcs.hpp"
 #include <iostream>
+#include <string>
 
 using namespace TanmiEngine;
+struct Timer
+{
+	float time;
+};
+struct ID
+{
+	int id;
+};
+struct Counter
+{
+	int num;
+	float t;
+};
+struct Time
+{
+	float t;
+};
+struct Name
+{
+	std::string name;
+};
+
+void InsSystem(Command& cmd, Resource res)
+{
+	auto& timer = res.Get<Timer>().time;
+	cmd.Spawn(ID{ 0 }, Counter{ 0, timer }, Name{ "David" })
+		.Spawn(ID{ 1 }, Time{ 0.0f }, Name{ "Anny" })
+		.Spawn(ID{ 2 }, Time{ 0.0f }, Name{ "Bob" })
+		.Spawn(ID{ 3 }, Time{ 0.0f }, Name{ "Cannon" });
+	std::cout << "--------Instance--------\n";
+}
+void RunSystem(Command& cmd, Queryer queryer, Resource res, Event& event)
+{
+	auto& timer = res.Get<Timer>().time;
+	Counter* count = nullptr;
+	auto player = queryer.GetEntitys<ID, Time>();
+	auto judge = queryer.GetEntitys<ID, Counter>();
+	for (auto& e : judge)
+	{
+		timer += 0.5f;
+		count = &queryer.GetComponent<Counter>(e);
+		count->num++;
+		count->t += timer;
+	}
+	for (auto& e : player)
+	{
+		queryer.GetComponent<Time>(e).t += timer;
+		std::cout << queryer.GetComponent<Name>(e).name << std::endl;
+		if (queryer.GetComponent<ID>(e).id == count->num)
+		{
+			std::cout << "ID:" << queryer.GetComponent<ID>(e).id 
+				<< "  Time:" << queryer.GetComponent<Time>(e).t << std::endl;
+		}
+	}std::cout << "--------Update--------\n";
+}
+
 auto main() -> int
 {
-	struct Timer
-	{
-		int time;
-	};
 	Sence sence;
-	Command cmd(sence);
-	cmd.Spawn(new int(1), new float(0.5f))
-		.Spawn(new double(0.3f), new int(2))
-		.Spawn(Timer{ 1 }, new int(3))
-		.Execute();
-	sence.SetResource(Timer{ 1 });
-
-	Queryer stage(sence);
-	auto entity_has_int = stage.GetEntitys<int*>();
-	for (auto e : entity_has_int)
-	{
-		if (stage.HasComponent<float*>(e))
-		{
-			std::cout << "the entity has float id is " << *(stage.GetComponent<int*>(e)) << std::endl;
-		}
-		if (stage.HasComponent<double*>(e))
-		{
-			std::cout <<"the entity has double id is "<< *(stage.GetComponent<int*> (e))<<std::endl;
-		}
-		if (stage.HasComponent<Timer>(e))
-		{
-			std::cout << "the entity has Timer id is " << *(stage.GetComponent<int*> (e)) << std::endl;
-		}
-	}
-	auto entity_has_int_and_timer = stage.GetEntitys<int*, Timer>();
-	for (auto e : entity_has_int_and_timer)
-	{
-		std::cout << "the entity has Timer id is " << *(stage.GetComponent<int*> (e)) << std::endl;
-	}
-	std::cout << std::endl;
+	sence.AddStartSystem(InsSystem)
+		.AddUpdateSystem(RunSystem)
+		.SetResource(Timer{ 0 });
+	sence.Start();
+	sence.Update();
+	sence.Update();
+	sence.Update();
 }

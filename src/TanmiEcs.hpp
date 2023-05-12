@@ -22,7 +22,7 @@ using createFunc = void* (*)(void);
 using destoryFunc = void(*)(void*);
 
 namespace TanmiEngine {
-	class Scene;
+	class Sence;
 	class Resource;
 	class Command;
 	class System;
@@ -30,6 +30,14 @@ namespace TanmiEngine {
 	class Event;
 	using UpdateSystem = void (*)(Command&, Queryer, Resource, Event&);
 	using StartupSystem = void (*)(Command&, Resource);
+
+	class Plugin
+	{
+	public:
+		virtual ~Plugin() = default;
+		virtual void Bulid(Sence* sence) = 0;
+		virtual void Quit(Sence* sence) = 0;
+	};
 
 	class Sence final
 	{
@@ -50,70 +58,62 @@ namespace TanmiEngine {
 		 * @return 本体引用
 		 */
 		template<typename T>
-		Sence& SetResource(T&& resource)
-		{
-			Command cmd(*this);
-			cmd.SetResource(std::forward<T>(resource));
-			return *this;
-		}
+		Sence& SetResource(T&& resource);
 		/**
 		 * @brief 获取一类资源
 		 *
 		 * @return 资源
 		 */
 		template<typename T>
-		T* GetResource()
+		T* GetResource();
+		/**
+		 * @brief 添加启用场景时初始化系统
+		 *
+		 * @param sys 系统
+		 * @return 本身
+		 */
+		Sence& AddStartSystem(StartupSystem sys)
 		{
-			Resource res;
-			if (res.Has<T>())
-			{
-				return &res.Get<T>();
-			}
-			else
-			{
-				return nullptr;
-			}
+			_startupSystems.push_back(sys);
+			return *this;
+		}
+		/**
+		 * @brief 添加更新系统
+		 *
+		 * @param sys 系统
+		 * @return 本身
+		 */
+		Sence& AddUpdateSystem(UpdateSystem sys)
+		{
+			_updateSystems.push_back(sys);
+			return *this;
+		}
+		template<typename T, typename ...Args>
+		Sence& AddPlugin(Args&& ...args)
+		{
+			static_assert(std::is_base_of_v<Plugin, T>);
+			_plugin_list.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+			return *this;
 		}
 		/**
 		 * @brief 启用场景
 		 */
-		void Start()
-		{
-			std::vector<Command> cmd_list;
+		void Start();
 
-			for (auto sys : _startupSystems)
-			{
-				Command cmd(*this);
-				sys(cmd, Resource{*this});
-				cmd_list.push_back(cmd);
-			}
-			for (auto& cmd : cmd_list)
-			{
-				cmd.Execute();
-			}
-		}
 		/**
 		 * @brief 更新场景
 		 */
-		void Update()
-		{
-			std::vector<Command> cmd_list;
-			for (auto sys : _updateSystems)
-			{
-				Command cmd(*this);
-				/*TODO:update*/
-				cmd_list.push_back(cmd);
-			}
-			for (auto& cmd : cmd_list)
-			{
-				cmd.Execute();
-			}
-		}
+		void Update();
+
 		/**
 		 * @brief 终止场景
 		 */
 		void ShutDown()
 		{
+			for (auto& plugin : _plugin_list)
+			{
+				plugin->Quit(this);
+			}
 			_entitys.clear();
 			_resources.clear();
 			_components.clear();
@@ -172,6 +172,7 @@ namespace TanmiEngine {
 
 		std::vector<StartupSystem> _startupSystems;	///< 场景启用调用系统列表
 		std::vector<UpdateSystem> _updateSystems;	///< 场景更新调用系统列表
+		std::vector<std::unique_ptr<Plugin>> _plugin_list;	///< 场景插件列表
 	};
 	/**
 	 * @brief 资源类, 用于资源管理
@@ -185,9 +186,9 @@ namespace TanmiEngine {
 		template<typename T>
 		bool Has()const
 		{
-			int index = IndexGenerator::Get<T>();
+			auto index = IndexGenerator::Get<T>();
 			auto it = _sence._resources.find(index);
-			return it != _sence._resources.end() && it->second.resource != nullptr;;
+			return it != _sence._resources.end() && it->second.resource != nullptr;
 		}
 		template<typename T>
 		T& Get()
@@ -428,14 +429,6 @@ namespace TanmiEngine {
 		std::vector<EntityID> _destroy_entitys;	///< 待销毁的实体
 		std::vector<ResourceDestoryInfo> _destory_resource; ///< 待销毁的资源
 	};
-	class System
-	{
-	public:
-		System();
-		~System();
-
-	private:
-	};
 	/**
 	 * @brief 查询器
 	 */
@@ -448,9 +441,9 @@ namespace TanmiEngine {
 		~Queryer() = default;
 		/**
 		 * @brief 获取包含指定组件的实体
-		 * 
+		 *
 		 * @tparam 需要查询的组件
-		 * @return 实体列表 
+		 * @return 实体列表
 		 */
 		template<typename ...Components>
 		std::vector<EntityID> GetEntitys()const
@@ -461,7 +454,7 @@ namespace TanmiEngine {
 		}
 		/**
 		 * @brief 查询实体是否拥有特定组件
-		 * 
+		 *
 		 * @tparam Component 组件类型
 		 * @param entity 实体
 		 * @return 是否包含
@@ -475,7 +468,7 @@ namespace TanmiEngine {
 		}
 		/**
 		 * @brief 获取实体拥有的组件
-		 * 
+		 *
 		 * @tparam Component 组件类型
 		 * @param entity 实体
 		 * @return 组件引用
@@ -490,7 +483,7 @@ namespace TanmiEngine {
 	private:
 		/**
 		 * @brief 对实体进行首次查询并分发
-		 * 
+		 *
 		 * @tparam T 首次组件类型
 		 * @tparam Remain 剩余组件类型
 		 * @param entity_list 查询的实体列表
@@ -500,7 +493,7 @@ namespace TanmiEngine {
 		{
 			auto index = IndexGenerator::Get<T>();
 			Sence::ComponentInfo& info = sence._components[index];
-			for (auto &e : info.entity_map)
+			for (auto& e : info.entity_map)
 			{
 				if constexpr (sizeof...(Remain) != 0)
 				{
@@ -541,12 +534,76 @@ namespace TanmiEngine {
 	private:
 		Sence& sence;
 	};
-	class Plugin
+	class Event
 	{
 	public:
-		Plugin();
-		~Plugin();
-
+		friend class Sence;
 	private:
+
+		void addEvents()
+		{}
+		void removeEvents()
+		{}
+	private:
+		std::vector<void(*)(void)> _removeEventFuncs;	///< 移除事件函数
+		std::vector<std::function<void(void)>> _addEventFuncs;	///< 添加事件函数
 	};
+	//------------------------------------------------------------------------------
+	inline void Sence::Start()
+	{
+		std::vector<Command> cmd_list;
+
+		for (auto& plugin : _plugin_list)
+		{
+			plugin->Bulid(this);
+		}
+
+		for (auto sys : _startupSystems)
+		{
+			Command cmd(*this);
+			sys(cmd, Resource{ *this });
+			cmd_list.push_back(cmd);
+		}
+		for (auto& cmd : cmd_list)
+		{
+			cmd.Execute();
+		}
+	}
+	inline void Sence::Update()
+	{
+		std::vector<Command> cmd_list;
+		Event events;
+		for (auto sys : _updateSystems)
+		{
+			Command cmd(*this);
+			sys(cmd, Queryer{ *this }, Resource{ *this }, events);
+			cmd_list.push_back(cmd);
+		}
+		events.removeEvents();
+		events.addEvents();
+		for (auto& cmd : cmd_list)
+		{
+			cmd.Execute();
+		}
+	}
+	template<typename T>
+	inline Sence& Sence::SetResource(T&& resource)
+	{
+		Command cmd(*this);
+		cmd.SetResource(std::forward<T>(resource));
+		return *this;
+	}
+	template<typename T>
+	inline T* Sence::GetResource()
+	{
+		Resource res(*this);
+		if (res.Has<T>())
+		{
+			return &res.Get<T>();
+		}
+		else
+		{
+			return nullptr;
+		}
+	}
 }
