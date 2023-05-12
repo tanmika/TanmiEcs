@@ -13,6 +13,38 @@
 
 namespace TanmiEngine{
 	/**
+	 * @brief 用于生成不同类型唯一的索引
+	 */
+	class IndexGenerator final
+	{
+	public:
+		template<typename T>
+		static int Get()
+		{
+			static int id = _idx++;
+			return id;
+		}
+	private:
+		inline static int _idx = 0;
+	};
+	/**
+	 * @brief 用于生成同类型不同对象唯一的ID
+	 */
+	template<typename T, typename = std::enable_if<std::is_integral_v<T>>>
+	class IDGenerator final
+	{
+	public:
+		static T GetID()
+		{
+			return _id++;
+		}
+	private:
+		inline static T _id = {};
+	};
+	/**
+	 * @brief 场景类，用于构建一个局部游戏场景
+	 */
+	/**
 	* @brief 对象池
 	*/
 	using createFunc = void* (*)(void);
