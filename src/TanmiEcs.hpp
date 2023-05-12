@@ -27,6 +27,9 @@ namespace TanmiEngine {
 	class Command;
 	class System;
 	class Queryer;
+	class Event;
+	using UpdateSystem = void (*)(Command&, Queryer, Resource, Event&);
+	using StartupSystem = void (*)(Command&, Resource);
 
 	class Sence final
 	{
@@ -74,11 +77,38 @@ namespace TanmiEngine {
 		/**
 		 * @brief 启用场景
 		 */
-		void Start();
+		void Start()
+		{
+			std::vector<Command> cmd_list;
+
+			for (auto sys : _startupSystems)
+			{
+				Command cmd(*this);
+				sys(cmd, Resource{*this});
+				cmd_list.push_back(cmd);
+			}
+			for (auto& cmd : cmd_list)
+			{
+				cmd.Execute();
+			}
+		}
 		/**
 		 * @brief 更新场景
 		 */
-		void Update();
+		void Update()
+		{
+			std::vector<Command> cmd_list;
+			for (auto sys : _updateSystems)
+			{
+				Command cmd(*this);
+				/*TODO:update*/
+				cmd_list.push_back(cmd);
+			}
+			for (auto& cmd : cmd_list)
+			{
+				cmd.Execute();
+			}
+		}
 		/**
 		 * @brief 终止场景
 		 */
@@ -139,6 +169,9 @@ namespace TanmiEngine {
 		 */
 		using ResouceMap = std::unordered_map<ComponentID, ResourceInfo>;
 		ResouceMap _resources;	///< 场景资源索引
+
+		std::vector<StartupSystem> _startupSystems;	///< 场景启用调用系统列表
+		std::vector<UpdateSystem> _updateSystems;	///< 场景更新调用系统列表
 	};
 	/**
 	 * @brief 资源类, 用于资源管理
@@ -379,6 +412,9 @@ namespace TanmiEngine {
 			std::vector<ComponentSpawnInfo> components;	///< 实体拥有的组件
 			EntityID id;	///< 实体ID
 		};
+		/**
+		 * @brief 待摧毁资源索引
+		 */
 		struct ResourceDestoryInfo
 		{
 			int _index;	///< 类型索引
