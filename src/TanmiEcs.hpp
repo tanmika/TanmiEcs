@@ -12,6 +12,7 @@
 #include <memory>
 #include <functional>
 #include "TanmiEcsTools.hpp"
+#include "TanmiEcsEvent.hpp"
 
 #define assertm(exp, msg) assert(((void)msg, exp))
 using EntityID = int;
@@ -22,13 +23,14 @@ using createFunc = void* (*)(void);
 using destoryFunc = void(*)(void*);
 
 namespace TanmiEngine {
-	class Sence;
-	class Resource;
-	class Command;
-	class System;
-	class Queryer;
-	class Event;
-	using UpdateSystem = void (*)(Command&, Queryer, Resource, Event&);
+	class Sence;		///< 场景类
+	class Resource;		///< 唯一资源类
+	class Command;		///< 命令类
+	class System;		///< 系统类
+	class Queryer;		///< 查询器类
+	class Event;		///< 事件类
+	class EventSystem;	///< 事件系统类
+	using UpdateSystem = void (*)(Command&, Queryer, Resource, Event& event);
 	using StartupSystem = void (*)(Command&, Resource);
 
 	class Plugin
@@ -51,6 +53,7 @@ namespace TanmiEngine {
 		}	///< 构造函数
 		Sence(const Sence&) = delete;				///< 禁止赋值构造
 		Sence& operator = (const Sence&) = delete;	///< 禁止赋值构造
+		~Sence();
 	public:
 		/**
 		 * @brief 添加一类资源
@@ -173,6 +176,7 @@ namespace TanmiEngine {
 		std::vector<StartupSystem> _startupSystems;	///< 场景启用调用系统列表
 		std::vector<UpdateSystem> _updateSystems;	///< 场景更新调用系统列表
 		std::vector<std::unique_ptr<Plugin>> _plugin_list;	///< 场景插件列表
+		EventSystem* _eventSystem = nullptr;	///< 事件系统
 	};
 	/**
 	 * @brief 资源类, 用于资源管理
@@ -534,25 +538,105 @@ namespace TanmiEngine {
 	private:
 		Sence& sence;
 	};
-	class Event
+	class EventSystem final
 	{
 	public:
 		friend class Sence;
+		friend class Event;
+		EventSystem() = delete;
+		EventSystem(Sence& sence) :_sence(sence)
+		{}
+		~EventSystem() = default;
 	private:
+		template<typename T>
+		void Send(T&& data)
+		{
+			EventMessage<T>::Set(std::forward<T>(data));
+			_update_list.push_back(EventMessage<T>::Update);
+		}
+		template<typename T>
+		void SendFuture(T&& data, float time)
+		{}
+		template<typename T>
+		bool Has()
+		{
+			return EventMessage<T>::Has();
+		}
+		template<typename T>
+		T& Get()
+		{
+			assertm(EventMessage<T>::Has(), "事件不存在");
+			auto& msg = EventMessage<T>::Get().value();
+			return msg;
+		}
+		template<typename T>
+		void Clear()
+		{
+			EventMessage<T>::Clear();
+		}
+		template<typename T>
+		void Update()
+		{
+			EventMessage<T>::Update();
+		}
+		void UpdateList()
+		{
+			for (auto e : _update_list)
+			{
+				e();
+			}
+		}
+	private:
+		Sence& _sence;
+		using updateFunc = void(*)(void);
+		std::vector<updateFunc> _update_list;
+	};
+	class Event
+	{
+	public:
+		Event(EventSystem& event_system) :_event_system(event_system)
+		{}
+		template<typename T>
+		Event& Send(T&& data)
+		{
+			_event_system.Send(std::forward<T>(data));
+			return *this;
+		}
+		template<typename T>
+		Event& SendIns(T&& data)
+		{
+			_event_system.Send(std::forward<T>(data));
+			_event_system.Update<T>();
+			return *this;
+		}
+		template<typename T>
+		Event& SendFuture(T&& data, float time)
+		{}
+		template<typename T>
+		bool Has()
+		{
+			return _event_system.Has<T>();
+		}
+		template<typename T>
+		T& Get()
+		{
+			return _event_system.Get<T>();
+		}
+		template<typename T>
+		Event& Clear()
+		{
+			_event_system.Clear<T>();
+			return *this;
+		}
 
-		void addEvents()
-		{}
-		void removeEvents()
-		{}
 	private:
-		std::vector<void(*)(void)> _removeEventFuncs;	///< 移除事件函数
-		std::vector<std::function<void(void)>> _addEventFuncs;	///< 添加事件函数
+		EventSystem& _event_system;
 	};
 	//------------------------------------------------------------------------------
 	inline void Sence::Start()
 	{
 		std::vector<Command> cmd_list;
-
+		_eventSystem = new EventSystem(*this);
 		for (auto& plugin : _plugin_list)
 		{
 			plugin->Bulid(this);
@@ -572,15 +656,16 @@ namespace TanmiEngine {
 	inline void Sence::Update()
 	{
 		std::vector<Command> cmd_list;
-		Event events;
+		Event events(*_eventSystem);
 		for (auto sys : _updateSystems)
 		{
 			Command cmd(*this);
 			sys(cmd, Queryer{ *this }, Resource{ *this }, events);
 			cmd_list.push_back(cmd);
 		}
-		events.removeEvents();
-		events.addEvents();
+		
+		_eventSystem->UpdateList();
+
 		for (auto& cmd : cmd_list)
 		{
 			cmd.Execute();
@@ -605,5 +690,9 @@ namespace TanmiEngine {
 		{
 			return nullptr;
 		}
+	}
+	inline Sence::~Sence()
+	{
+		_eventSystem->~EventSystem();
 	}
 }

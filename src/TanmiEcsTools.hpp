@@ -1,17 +1,18 @@
 /*****************************************************************//**
  * \file   TanmiEcsTools.hpp
  * \brief  引擎相关辅助函数、结构
- * 
+ *
  * \author tanmika
  * \date   May 2023
  *********************************************************************/
 #pragma once
 
 #include <assert.h>
+#include <optional>
 
 #define assertm(exp, msg) assert(((void)msg, exp))
 
-namespace TanmiEngine{
+namespace TanmiEngine {
 	/**
 	 * @brief 用于生成不同类型唯一的索引
 	 */
@@ -41,9 +42,6 @@ namespace TanmiEngine{
 	private:
 		inline static T _id = {};
 	};
-	/**
-	 * @brief 场景类，用于构建一个局部游戏场景
-	 */
 	/**
 	* @brief 对象池
 	*/
@@ -99,5 +97,42 @@ namespace TanmiEngine{
 			assertm("create function cann't be empty", create_f);
 			assertm("destory function cann't be empty", destory_f);
 		}
+	};
+	template<typename T>
+	class EventMessage final
+	{
+	public:
+		static void Set(const T& msg)
+		{
+			_msg_next = msg;
+		};
+		static void Set(T&& msg)
+		{
+			_msg_next = std::move(msg);
+		};
+		static std::optional<T>& Get()
+		{
+			return _msg;
+		};
+		static bool Has()
+		{
+			return _msg.has_value();
+		};
+		static void Clear()
+		{
+			_msg = std::nullopt;
+			_msg_next = std::nullopt;
+		}
+		static void Update()
+		{
+			if (_msg_next.has_value())
+			{
+				_msg = _msg_next;
+				_msg_next = std::nullopt;
+			}
+		};
+	private:
+		inline static std::optional<T> _msg = std::nullopt;
+		inline static std::optional<T> _msg_next = std::nullopt;
 	};
 }

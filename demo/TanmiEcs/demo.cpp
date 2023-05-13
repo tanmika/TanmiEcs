@@ -40,6 +40,7 @@ void RunSystem(Command& cmd, Queryer queryer, Resource res, Event& event)
 	Counter* count = nullptr;
 	auto player = queryer.GetEntitys<ID, Time>();
 	auto judge = queryer.GetEntitys<ID, Counter>();
+	event.Send<int>(0);
 	for (auto& e : judge)
 	{
 		timer += 0.5f;
@@ -53,7 +54,12 @@ void RunSystem(Command& cmd, Queryer queryer, Resource res, Event& event)
 		std::cout << queryer.GetComponent<Name>(e).name << std::endl;
 		if (count && queryer.GetComponent<ID>(e).id == count->num)
 		{
-			std::cout << "ID:" << queryer.GetComponent<ID>(e).id 
+			if (event.Has<int>())
+			{
+				std::cout << event.Get<int>() << std::endl;
+				event.Send<int>(event.Get<int>() - 1);
+			}
+			std::cout << "ID:" << queryer.GetComponent<ID>(e).id
 				<< "  Time:" << queryer.GetComponent<Time>(e).t << std::endl;
 		}
 	}std::cout << "--------Update--------\n";
@@ -69,4 +75,11 @@ auto main() -> int
 	sence.Update();
 	sence.Update();
 	sence.Update();
+
+	EventSystem eventsys(sence);
+	Event event(eventsys);
+	if (event.SendIns<int>(1)
+		.Send<int>(2)
+		.Has<int>())
+		std::cout << event.Get<int>();
 }
